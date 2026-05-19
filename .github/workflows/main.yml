@@ -13,33 +13,30 @@ jobs:
         echo "Downloading AnyDesk..."
         Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
-    - name: Install and Start AnyDesk Service
+    - name: Set Password and Start AnyDesk
       run: |
-        echo "Installing AnyDesk as a background service..."
-        # Running the official install command helps register the ID properly
-        Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install", "C:\Program Files (x86)\AnyDesk", "--silent" -Wait
-        
         echo "Setting unattended access password..."
-        echo "YourSecurePassword123!" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+        # Using the local file directly to set the password
+        echo "YourSecurePassword123!" | .\AnyDesk.exe --set-password
         
-        echo "Ensuring service is running..."
-        Start-Service -Name "AnyDesk" -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 5
+        echo "Starting AnyDesk background service..."
+        # Start it as a background service and wait a few seconds for it to initialize
+        Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--start-service" -WindowStyle Hidden
+        Start-Sleep -Seconds 10
 
     - name: Retrieve and Verify AnyDesk ID
       shell: powershell
       run: |
-        echo "Retrieving AnyDesk ID (waiting for registration)..."
-        $anydesk_path = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+        echo "Retrieving AnyDesk ID (waiting for network registration)..."
         $id = ""
         $attempts = 0
-        $max_attempts = 6
+        $max_attempts = 10
         
-        # Loop up to 6 times (30 seconds) to allow AnyDesk to generate the ID
+        # Loop up to 10 times (50 seconds) to give the network time to assign an ID
         while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
             Start-Sleep -Seconds 5
-            $id = & $anydesk_path --get-id
-            $id = $id.Trim()
+            $id = .\AnyDesk.exe --get-id
+            if ($id) { $id = $id.Trim() }
             $attempts++
             echo "Attempt $attempts: Retrieved ID -> '$id'"
         }
