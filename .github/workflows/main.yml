@@ -1,7 +1,7 @@
 name: Remote Desktop via AnyDesk
 
 on: 
-  workflow_dispatch: 
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:
   anydesk-connect:
@@ -24,15 +24,16 @@ jobs:
         run: |
           cd "C:\AnyDesk"
           
-          Write-Host "=== STARTING ANYDESK BACKGROUND PROCESS ==="
-          # Start-Process launches it in the background so it stays alive
-          Start-Process -FilePath ".\anydesk.exe" -PassThru
+          Write-Host "=== INITIALIZING ANYDESK SERVICE ==="
+          # Launches AnyDesk explicitly as a background service so it binds to the network
+          Start-Process -FilePath ".\anydesk.exe" -ArgumentList "--service" -PassThru
           
-          Write-Host "=== WAITING FOR INITIALIZATION ==="
-          Start-Sleep -Seconds 7
+          Write-Host "=== WAITING FOR NETWORK HANDSHAKE ==="
+          # 20 seconds gives the headless VM time to get its unique ID assigned
+          Start-Sleep -Seconds 20
           
           Write-Host "=== CONFIGURING UNATTENDED ACCESS PASSWORD ==="
-          # Explicitly piping the password into the running process instance
+          # Sets your password. Change 'YourSecurePassword123!' if desired.
           echo "YourSecurePassword123!" | .\anydesk.exe --set-password
           
           Write-Host "=== CHECKING RUNNING PROCESSES ==="
@@ -44,23 +45,33 @@ jobs:
           cd "C:\AnyDesk"
           
           Write-Host "=== FETCHING ID (RAW OUTPUT) ==="
-          # Capturing and printing directly to console
           $anydeskId = .\anydesk.exe --get-id
+          
+          # Clean up any trailing spaces or formatting issues
+          if ($anydeskId) {
+              $anydeskId = $anydeskId.Trim()
+          }
           
           Write-Host "--------------------------------------------------------"
           Write-Host "YOUR ANYDESK ID IS: $anydeskId"
           Write-Host "--------------------------------------------------------"
           
-          # If it still fails, check the configuration file text directly
-          if ($anydeskId -match "SERVICE_NOT_RUNNING") {
-              Write-Host "=== DEBUG: Dumping Service Logs ==="
-              Get-Content "$env:USERPROFILE\AppData\Roaming\AnyDesk\system.conf" -ErrorAction SilentlyContinue | Select-String "ad.roster.id"
+          # ULTIMATE FALLBACK: If the ID is blank or says service not running, read the configuration file directly
+          if ([string]::IsNullOrEmpty($anydeskId) -or $anydeskId -match "SERVICE_NOT_RUNNING") {
+              Write-Host "=== DEBUG: Scrape ID from System Configuration ==="
+              Start-Sleep -Seconds 5
+              $configPath = "$env:PROGRAMDATA\AnyDesk\system.conf"
+              if (Test-Path $configPath) {
+                  Get-Content $configPath | Select-String "ad.roster.id"
+              } else {
+                  Write-Host "Configuration file not found at $configPath yet."
+              }
           }
 
       - name: 4. Keep Runner Alive
         shell: powershell
         run: |
           Write-Host "=== RUNNER LIVE ==="
-          Write-Host "Connect using the ID displayed above."
+          Write-Host "Connect using the ID displayed in Step 3."
           Write-Host "This step keeps the session open for 1 hour (3600 seconds)."
           Start-Sleep -Seconds 3600
