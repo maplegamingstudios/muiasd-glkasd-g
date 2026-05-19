@@ -16,11 +16,9 @@ jobs:
     - name: Set Password and Start AnyDesk
       run: |
         echo "Setting unattended access password..."
-        # Using the local file directly to set the password
         echo "YourSecurePassword123!" | .\AnyDesk.exe --set-password
         
         echo "Starting AnyDesk background service..."
-        # Start it as a background service and wait a few seconds for it to initialize
         Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--start-service" -WindowStyle Hidden
         Start-Sleep -Seconds 10
 
@@ -32,16 +30,15 @@ jobs:
         $attempts = 0
         $max_attempts = 10
         
-        # Loop up to 10 times (50 seconds) to give the network time to assign an ID
         while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
             Start-Sleep -Seconds 5
             $id = .\AnyDesk.exe --get-id
             if ($id) { $id = $id.Trim() }
             $attempts++
-            echo "Attempt $attempts: Retrieved ID -> '$id'"
+            # Wrapped in ${} to prevent the parser error
+            echo "Attempt ${attempts} - Retrieved ID -> '$id'"
         }
         
-        # CRITICAL CHECK: If ID is still empty, force the GitHub Action to FAIL
         if ([string]::IsNullOrWhiteSpace($id)) {
             Write-Error "CRITICAL ERROR: AnyDesk ID could not be generated! Failing the build."
             exit 1
