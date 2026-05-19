@@ -1,6 +1,6 @@
-name: AnyDesk Remote Desktop (Fixed Setup)
+name: CI
 
-on:
+on: 
   workflow_dispatch:
 
 jobs:
@@ -9,10 +9,8 @@ jobs:
     
     steps:
     - name: Download AnyDesk
-      shell: powershell
       run: |
         echo "Downloading AnyDesk..."
-        # Fixed: Using the official direct download URL for the Windows binary
         Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
     - name: Explicit Install and Dynamic Path Discovery
@@ -28,56 +26,41 @@ jobs:
         echo "Dynamically discovering AnyDesk executable path..."
         $svcPath = (Get-CimInstance Win32_Service -Filter "Name='AnyDesk'").PathName
         
-        # Strip quotes and parameters safely from system service string
-        if ($svcPath -match '"([^"]+)"') { 
-            $resolvedPath = $matches[1] 
-        } else { 
-            $resolvedPath = $svcPath 
-        }
+        if ($svcPath -match '"([^"]+)"') { $resolvedPath = $matches[1] } else { $resolvedPath = $svcPath }
         echo "Resolved AnyDesk Path: $resolvedPath"
         
-        # Save the path to the environment file securely
         echo "ANYDESK_EXE_PATH=$resolvedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Set Password Securely
+    - name: Set Password and Configure Unattended Profile
       shell: powershell
       run: |
-        echo "Setting unattended access password..."
-        $exePath = "${{ env.ANYDESK_EXE_PATH }}"
+        echo "Setting unattended access password for the default profile..."
+        # Target the explicit '_unattended_access' profile which forces headless authorization
+        echo "YourSecurePassword123!" | & "${{ env.ANYDESK_EXE_PATH }}" --set-password _unattended_access
         
-        # Use .NET process instantiation to safely pass pipes across paths with spaces
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $exePath
-        $psi.Arguments = "--set-password"
-        $psi.RedirectStandardInput = $true
-        $psi.UseShellExecute = $false
+        echo "Overriding security settings to bypass interactive acceptance..."
+        # Force AnyDesk to never show the incoming session dialog and just accept the password
+        echo "ad.security.interactive_access=2" | Out-File -FilePath "$env:ProgramData\AnyDesk\system.conf" -Encoding utf8 -Append
         
-        $process = [System.Diagnostics.Process]::Start($psi)
-        $process.StandardInput.WriteLine("YourSecurePassword123!")
-        $process.StandardInput.Close()
-        $process.WaitForExit()
-        
+        echo "Restarting AnyDesk service to apply changes..."
+        Restart-Service -Name "AnyDesk" -Force
         Start-Sleep -Seconds 5
 
     - name: Retrieve and Verify AnyDesk ID
       shell: powershell
       run: |
         echo "Checking AnyDesk local status..."
-        $exePath = "${{ env.ANYDESK_EXE_PATH }}"
-        & "$exePath" --get-status
+        & "${{ env.ANYDESK_EXE_PATH }}" --get-status
         
         echo "Retrieving AnyDesk ID (waiting for network registration)..."
         $id = ""
         $attempts = 0
-        $max_attempts = 15
+        $max_attempts = 10
         
         while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
             Start-Sleep -Seconds 5
-            # Force status check to wake up the network components inside the runner context
-            & "$exePath" --get-status | Out-Null
-            
-            $id = & "$exePath" --get-id
-            if ($id) { $id = "$id".Trim() }
+            $id = & "${{ env.ANYDESK_EXE_PATH }}" --get-id | Out-String
+            if ($id) { $id = $id.Trim() }
             $attempts++
             echo "Attempt ${attempts} - Retrieved ID -> '$id'"
         }
@@ -100,7 +83,6 @@ jobs:
         echo "============================================="
 
     - name: Keep Runner Alive
-      shell: powershell
       run: |
         echo "Keep-alive active. Connect now!"
         $timeout = 21600 
