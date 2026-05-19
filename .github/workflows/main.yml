@@ -1,4 +1,4 @@
-name: AnyDesk Remote Desktop
+name: CI
 
 on: 
   workflow_dispatch:
@@ -13,18 +13,34 @@ jobs:
         echo "Downloading AnyDesk..."
         Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
-    - name: Set Password and Start AnyDesk
+    - name: Explicit Install and Debug Service Status
+      shell: powershell
+      run: |
+        echo "Installing AnyDesk to Program Files silently..."
+        # Launching installer and waiting completely for it to finish extraction
+        $installProcess = Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install", "C:\Program Files (x86)\AnyDesk", "--silent" -PassThru -Wait
+        echo "Installer Exit Code: $($installProcess.ExitCode)"
+        
+        echo "Checking if service exists and forcing it to run..."
+        # If the installer failed to make a background windows service, this will throw an explicit visible error
+        Get-Service -Name "AnyDesk" -ErrorAction Stop | Set-Service -Status Running
+        Get-Service -Name "AnyDesk" | Select-Object Name, Status, StartType
+
+    - name: Set Password
+      shell: powershell
       run: |
         echo "Setting unattended access password..."
-        echo "YourSecurePassword123!" | .\AnyDesk.exe --set-password
-        
-        echo "Starting AnyDesk background service..."
-        Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--start-service" -WindowStyle Hidden
-        Start-Sleep -Seconds 10
+        # Execute password binding on the installed binary
+        echo "YourSecurePassword123!" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+        Start-Sleep -Seconds 5
 
     - name: Retrieve and Verify AnyDesk ID
       shell: powershell
       run: |
+        $anydesk_path = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+        echo "Checking AnyDesk local status..."
+        & $anydesk_path --get-status
+        
         echo "Retrieving AnyDesk ID (waiting for network registration)..."
         $id = ""
         $attempts = 0
@@ -32,15 +48,23 @@ jobs:
         
         while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
             Start-Sleep -Seconds 5
-            $id = .\AnyDesk.exe --get-id
+            # Piping output explicitly to Out-String to force clean text retrieval
+            $id = & $anydesk_path --get-id | Out-String
             if ($id) { $id = $id.Trim() }
             $attempts++
-            # Wrapped in ${} to prevent the parser error
             echo "Attempt ${attempts} - Retrieved ID -> '$id'"
         }
         
         if ([string]::IsNullOrWhiteSpace($id)) {
-            Write-Error "CRITICAL ERROR: AnyDesk ID could not be generated! Failing the build."
+            echo "===================== DEBUG ENGINE LOGS ====================="
+            # If it still fails, let's dump AnyDesk's internal error logs straight to the console
+            if (Test-Path "$env:ProgramData\AnyDesk\ad_svc.log") {
+                Get-Content "$env:ProgramData\AnyDesk\ad_svc.log" -Tail 50
+            } else {
+                echo "AnyDesk service log file not found."
+            }
+            echo "============================================================="
+            Write-Error "CRITICAL ERROR: AnyDesk ID is empty! Check the debug logs above."
             exit 1
         }
         
