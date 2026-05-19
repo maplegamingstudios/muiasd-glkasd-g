@@ -1,4 +1,4 @@
-name: CI
+name: AnyDesk Remote Desktop
 
 on: 
   workflow_dispatch:
@@ -13,33 +13,39 @@ jobs:
         echo "Downloading AnyDesk..."
         Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
-    - name: Explicit Install and Debug Service Status
+    - name: Explicit Install and Dynamic Path Discovery
+      id: find_path
       shell: powershell
       run: |
         echo "Installing AnyDesk to Program Files silently..."
-        # Launching installer and waiting completely for it to finish extraction
         $installProcess = Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install", "C:\Program Files (x86)\AnyDesk", "--silent" -PassThru -Wait
-        echo "Installer Exit Code: $($installProcess.ExitCode)"
         
-        echo "Checking if service exists and forcing it to run..."
-        # If the installer failed to make a background windows service, this will throw an explicit visible error
+        echo "Ensuring service is running..."
         Get-Service -Name "AnyDesk" -ErrorAction Stop | Set-Service -Status Running
-        Get-Service -Name "AnyDesk" | Select-Object Name, Status, StartType
+        
+        echo "Dynamically discovering AnyDesk executable path..."
+        # This pulls the exact path Windows is using to run the background service
+        $svcPath = (Get-CimInstance Win32_Service -Filter "Name='AnyDesk'").PathName
+        
+        # Clean up quotes or extra parameters from the service path string
+        if ($svcPath -match '"([^"]+)"') { $resolvedPath = $matches[1] } else { $resolvedPath = $svcPath }
+        echo "Resolved AnyDesk Path: $resolvedPath"
+        
+        # Save the discovered path into the GitHub environment variable for the next steps
+        echo "ANYDESK_EXE_PATH=$resolvedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Set Password
       shell: powershell
       run: |
-        echo "Setting unattended access password..."
-        # Execute password binding on the installed binary
-        echo "YourSecurePassword123!" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+        echo "Setting unattended access password using path: ${{ env.ANYDESK_EXE_PATH }}"
+        echo "YourSecurePassword123!" | & "${{ env.ANYDESK_EXE_PATH }}" --set-password
         Start-Sleep -Seconds 5
 
     - name: Retrieve and Verify AnyDesk ID
       shell: powershell
       run: |
-        $anydesk_path = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
         echo "Checking AnyDesk local status..."
-        & $anydesk_path --get-status
+        & "${{ env.ANYDESK_EXE_PATH }}" --get-status
         
         echo "Retrieving AnyDesk ID (waiting for network registration)..."
         $id = ""
@@ -48,8 +54,7 @@ jobs:
         
         while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
             Start-Sleep -Seconds 5
-            # Piping output explicitly to Out-String to force clean text retrieval
-            $id = & $anydesk_path --get-id | Out-String
+            $id = & "${{ env.ANYDESK_EXE_PATH }}" --get-id | Out-String
             if ($id) { $id = $id.Trim() }
             $attempts++
             echo "Attempt ${attempts} - Retrieved ID -> '$id'"
@@ -57,7 +62,6 @@ jobs:
         
         if ([string]::IsNullOrWhiteSpace($id)) {
             echo "===================== DEBUG ENGINE LOGS ====================="
-            # If it still fails, let's dump AnyDesk's internal error logs straight to the console
             if (Test-Path "$env:ProgramData\AnyDesk\ad_svc.log") {
                 Get-Content "$env:ProgramData\AnyDesk\ad_svc.log" -Tail 50
             } else {
