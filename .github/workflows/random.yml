@@ -59,15 +59,6 @@ jobs:
         
         Start-Sleep -Seconds 5
 
-    - name: Bypass Session 0 Isolation (GUI Enable)
-      shell: powershell
-      run: |
-        echo "Attempting to attach runner to a visual interactive console session..."
-        # This command attempts to force the background workflow process into the local console screen state
-        query session
-        tscon 1 /dest:console 2>$null
-        tscon 2 /dest:console 2>$null
-
     - name: Retrieve and Verify AnyDesk ID
       shell: powershell
       run: |
