@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAPLE NETWORK | CPS TESTER</title>
+    <!-- Importing Syne Font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0d0d0e;
+            --card-bg: #141416;
+            --accent-color: #ff5a36;
+            --accent-hover: #e04422;
+            --text-main: #ffffff;
+            --text-muted: #80808a;
+            --border-color: #232326;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Syne', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Background grid effect for the "Network" vibe */
+        body::before {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(to right, rgba(255, 90, 54, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 90, 54, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        header h1 span {
+            color: var(--accent-color);
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+        }
+
+        /* Settings Grid */
+        .settings-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .time-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .time-btn:hover {
+            border-color: var(--accent-color);
+        }
+
+        .time-btn.active {
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Main Click Pad */
+        .click-area {
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            height: 250px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.05s ease, border-color 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .click-area:active {
+            transform: scale(0.99);
+            border-color: var(--accent-color);
+        }
+
+        .click-area h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            pointer-events: none;
+        }
+
+        .click-area p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 8px;
+            pointer-events: none;
+        }
+
+        /* Results Display */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .stat-card.highlight .stat-value {
+            color: var(--accent-color);
+        }
+
+        /* Reset Button */
+        .reset-btn {
+            margin-top: 25px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 10px 24px;
+            font-weight: 700;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        .reset-btn:hover {
+            border-color: #ffffff;
+            color: #ffffff;
+        }
+
+        /* Simple Ripple Effect on Click */
+        .ripple {
+            position: absolute;
+            background: rgba(255, 90, 54, 0.15);
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple-effect 0.4s linear;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-effect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>MAPLE <span>NETWORK</span></h1>
+            <p>CPS TESTER // PERFORMANCE</p>
+        </header>
+
+        <div class="settings-bar">
+            <button class="time-btn active" data-time="5">5 SECONDS</button>
+            <button class="time-btn" data-time="10">10 SECONDS</button>
+            <button class="time-btn" data-time="15">15 SECONDS</button>
+        </div>
+
+        <div class="click-area" id="click-pad">
+            <h2 id="prompt-text">CLICK HERE TO START</h2>
+            <p id="sub-prompt">TIMER STARTS ON FIRST CLICK</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Clicks</div>
+                <div class="stat-value" id="score-clicks">0</div>
+            </div>
+            <div class="stat-card highlight">
+                <div class="stat-label">CPS</div>
+                <div class="stat-value" id="score-cps">0.0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Time Left</div>
+                <div class="stat-value" id="score-time">5.0s</div>
+            </div>
+        </div>
+
+        <button class="reset-btn" id="reset-btn">Reset System</button>
+    </div>
+
+    <script>
+        // State variables
+        let duration = 5; 
+        let timeLeft = duration;
+        let clicks = 0;
+        let isRunning = false;
+        let isFinished = false;
+        let timerInterval = null;
+
+        // Elements
+        const clickPad = document.getElementById('click-pad');
+        const promptText = document.getElementById('prompt-text');
+        const subPrompt = document.getElementById('sub-prompt');
+        const clicksDisplay = document.getElementById('score-clicks');
+        const cpsDisplay = document.getElementById('score-cps');
+        const timeDisplay = document.getElementById('score-time');
+        const resetBtn = document.getElementById('reset-btn');
+        const timeButtons = document.querySelectorAll('.time-btn');
+
+        // Handle Time Mode selection
+        timeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!isRunning) {
+                    timeButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    duration = parseInt(button.getAttribute('data-time'));
+                    resetTest();
+                }
+            });
+        });
+
+        // Main click area logic
+        clickPad.addEventListener('mousedown', (e) => {
+            if (isFinished) return;
+
+            // Start logic
+            if (!isRunning) {
+                isRunning = true;
+                disableTimeButtons(true);
+                promptText.innerText = "CLICK FAST!";
+                subPrompt.innerText = "Test in progress...";
+                
+                let startTime = Date.now();
+                let endTime = startTime + (duration * 1000);
+
+                timerInterval = setInterval(() => {
+                    let now = Date.now();
+                    timeLeft = Math.max(0, (endTime - now) / 1000);
+                    timeDisplay.innerText = timeLeft.toFixed(1) + 's';
+                    
+                    // Live CPS calculation
+                    let elapsed = (now - startTime) / 1000;
+                    if (elapsed > 0) {
+                        cpsDisplay.innerText = (clicks / elapsed).toFixed(1);
+                    }
+
+                    if (now >= endTime) {
+                        endTest();
+                    }
+                }, 50);
+            }
+
+            // Increment clicks
+            clicks++;
+            clicksDisplay.innerText = clicks;
+            
+            // Visual click ripple effect
+            createRipple(e);
+        });
+
+        function endTest() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            isFinished = true;
+            
+            timeDisplay.innerText = '0.0s';
+            let finalCps = (clicks / duration).toFixed(1);
+            cpsDisplay.innerText = finalCps;
+            
+            promptText.innerText = `FINISHED: ${finalCps} CPS`;
+            subPrompt.innerText = "Click 'Reset System' to try again.";
+            clickPad.style.borderColor = 'var(--accent-color)';
+        }
+
+        function resetTest() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            isFinished = false;
+            clicks = 0;
+            timeLeft = duration;
+            
+            clicksDisplay.innerText = '0';
+            cpsDisplay.innerText = '0.0';
+            timeDisplay.innerText = duration.toFixed(1) + 's';
+            
+            promptText.innerText = "CLICK HERE TO START";
+            subPrompt.innerText = "TIMER STARTS ON FIRST CLICK";
+            clickPad.style.borderColor = 'var(--border-color)';
+            disableTimeButtons(false);
+        }
+
+        function disableTimeButtons(disable) {
+            timeButtons.forEach(btn => btn.disabled = disable);
+        }
+
+        function createRipple(e) {
+            const rect = clickPad.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const ripple = document.createElement('span');
+            ripple.classList.add('ripple');
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            
+            clickPad.appendChild(ripple);
+            
+            setTimeout(() => {
+                ripple.remove();
+            }, 400);
+        }
+
+        resetBtn.addEventListener('click', resetTest);
+    </script>
+</body>
+</html>
