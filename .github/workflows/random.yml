@@ -1,0 +1,119 @@
+name: AnyDesk Remote Desktop (Fixed Setup)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  anydesk-connect:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Download AnyDesk
+      shell: powershell
+      run: |
+        echo "Downloading AnyDesk..."
+        # Fixed: Using the official direct download URL for the Windows binary
+        Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
+
+    - name: Explicit Install and Dynamic Path Discovery
+      id: find_path
+      shell: powershell
+      run: |
+        echo "Installing AnyDesk to Program Files silently..."
+        $installProcess = Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install", "C:\Program Files (x86)\AnyDesk", "--silent" -PassThru -Wait
+        
+        echo "Ensuring service is running..."
+        Get-Service -Name "AnyDesk" -ErrorAction Stop | Set-Service -Status Running
+        
+        echo "Dynamically discovering AnyDesk executable path..."
+        $svcPath = (Get-CimInstance Win32_Service -Filter "Name='AnyDesk'").PathName
+        
+        # Strip quotes and parameters safely from system service string
+        if ($svcPath -match '"([^"]+)"') { 
+            $resolvedPath = $matches[1] 
+        } else { 
+            $resolvedPath = $svcPath 
+        }
+        echo "Resolved AnyDesk Path: $resolvedPath"
+        
+        # Save the path to the environment file securely
+        echo "ANYDESK_EXE_PATH=$resolvedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Set Password Securely
+      shell: powershell
+      run: |
+        echo "Setting unattended access password..."
+        $exePath = "${{ env.ANYDESK_EXE_PATH }}"
+        
+        # Use .NET process instantiation to safely pass pipes across paths with spaces
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $exePath
+        $psi.Arguments = "--set-password"
+        $psi.RedirectStandardInput = $true
+        $psi.UseShellExecute = $false
+        
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.StandardInput.WriteLine("YourSecurePassword123!")
+        $process.StandardInput.Close()
+        $process.WaitForExit()
+        
+        Start-Sleep -Seconds 5
+
+    - name: Bypass Session 0 Isolation (GUI Enable)
+      shell: powershell
+      run: |
+        echo "Attempting to attach runner to a visual interactive console session..."
+        # This command attempts to force the background workflow process into the local console screen state
+        query session
+        tscon 1 /dest:console 2>$null
+        tscon 2 /dest:console 2>$null
+
+    - name: Retrieve and Verify AnyDesk ID
+      shell: powershell
+      run: |
+        echo "Checking AnyDesk local status..."
+        $exePath = "${{ env.ANYDESK_EXE_PATH }}"
+        & "$exePath" --get-status
+        
+        echo "Retrieving AnyDesk ID (waiting for network registration)..."
+        $id = ""
+        $attempts = 0
+        $max_attempts = 15
+        
+        while ([string]::IsNullOrWhiteSpace($id) -and $attempts -lt $max_attempts) {
+            Start-Sleep -Seconds 5
+            # Force status check to wake up the network components inside the runner context
+            & "$exePath" --get-status | Out-Null
+            
+            $id = & "$exePath" --get-id
+            if ($id) { $id = "$id".Trim() }
+            $attempts++
+            echo "Attempt ${attempts} - Retrieved ID -> '$id'"
+        }
+        
+        if ([string]::IsNullOrWhiteSpace($id)) {
+            echo "===================== DEBUG ENGINE LOGS ====================="
+            if (Test-Path "$env:ProgramData\AnyDesk\ad_svc.log") {
+                Get-Content "$env:ProgramData\AnyDesk\ad_svc.log" -Tail 50
+            } else {
+                echo "AnyDesk service log file not found."
+            }
+            echo "============================================================="
+            Write-Error "CRITICAL ERROR: AnyDesk ID is empty! Check the debug logs above."
+            exit 1
+        }
+        
+        echo "============================================="
+        echo " YOUR ANYDESK ID IS: $id"
+        echo " PASSWORD IS: YourSecurePassword123!"
+        echo "============================================="
+
+    - name: Keep Runner Alive
+      shell: powershell
+      run: |
+        echo "Keep-alive active. Connect now!"
+        $timeout = 21600 
+        while ($timeout -gt 0) {
+            Start-Sleep -Seconds 10
+            $timeout -= 10
+        }
