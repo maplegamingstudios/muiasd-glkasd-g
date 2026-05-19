@@ -1,77 +1,44 @@
-name: Remote Desktop via AnyDesk
+name: AnyDesk Remote Desktop
 
 on: 
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  workflow_dispatch: # Allows you to trigger this manually from the Actions tab
 
 jobs:
   anydesk-connect:
     runs-on: windows-latest
+    
     steps:
-      - name: 1. Download and Setup AnyDesk
-        shell: powershell
-        run: |
-          Write-Host "=== CREATING DIRECTORY ==="
-          New-Item -ItemType Directory -Force -Path "C:\AnyDesk"
-          
-          Write-Host "=== DOWNLOADING ANYDESK ==="
-          Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "C:\AnyDesk\anydesk.exe" -Verbose
-          
-          Write-Host "=== VERIFYING DOWNLOAD ==="
-          Get-ChildItem "C:\AnyDesk"
+    - name: Download AnyDesk
+      run: |
+        echo "Downloading AnyDesk..."
+        Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
-      - name: 2. Start AnyDesk Service & Set Password
-        shell: powershell
-        run: |
-          cd "C:\AnyDesk"
-          
-          Write-Host "=== INITIALIZING ANYDESK SERVICE ==="
-          # Launches AnyDesk explicitly as a background service so it binds to the network
-          Start-Process -FilePath ".\anydesk.exe" -ArgumentList "--service" -PassThru
-          
-          Write-Host "=== WAITING FOR NETWORK HANDSHAKE ==="
-          # 20 seconds gives the headless VM time to get its unique ID assigned
-          Start-Sleep -Seconds 20
-          
-          Write-Host "=== CONFIGURING UNATTENDED ACCESS PASSWORD ==="
-          # Sets your password. Change 'YourSecurePassword123!' if desired.
-          echo "YourSecurePassword123!" | .\anydesk.exe --set-password
-          
-          Write-Host "=== CHECKING RUNNING PROCESSES ==="
-          Get-Process -Name "anydesk" -ErrorAction SilentlyContinue
+    - name: Set AnyDesk Password and Start Service
+      run: |
+        echo "Setting unattended access password..."
+        # Replace 'YourSecurePassword123!' with a password of your choice
+        echo "YourSecurePassword123!" | .\AnyDesk.exe --set-password
+        
+        echo "Starting AnyDesk..."
+        Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--start-service" -WindowStyle Hidden
+        Start-Sleep -Seconds 5
 
-      - name: 3. Retrieve AnyDesk ID
-        shell: powershell
-        run: |
-          cd "C:\AnyDesk"
-          
-          Write-Host "=== FETCHING ID (RAW OUTPUT) ==="
-          $anydeskId = .\anydesk.exe --get-id
-          
-          # Clean up any trailing spaces or formatting issues
-          if ($anydeskId) {
-              $anydeskId = $anydeskId.Trim()
-          }
-          
-          Write-Host "--------------------------------------------------------"
-          Write-Host "YOUR ANYDESK ID IS: $anydeskId"
-          Write-Host "--------------------------------------------------------"
-          
-          # ULTIMATE FALLBACK: If the ID is blank or says service not running, read the configuration file directly
-          if ([string]::IsNullOrEmpty($anydeskId) -or $anydeskId -match "SERVICE_NOT_RUNNING") {
-              Write-Host "=== DEBUG: Scrape ID from System Configuration ==="
-              Start-Sleep -Seconds 5
-              $configPath = "$env:PROGRAMDATA\AnyDesk\system.conf"
-              if (Test-Path $configPath) {
-                  Get-Content $configPath | Select-String "ad.roster.id"
-              } else {
-                  Write-Host "Configuration file not found at $configPath yet."
-              }
-          }
+    - name: Retrieve and Display AnyDesk ID
+      run: |
+        echo "Retrieving AnyDesk ID..."
+        $anydesk_id = .\AnyDesk.exe --get-id
+        
+        echo "============================================="
+        echo " YOUR ANYDESK ID IS: $anydesk_id"
+        echo " PASSWORD IS: YourSecurePassword123!"
+        echo "============================================="
 
-      - name: 4. Keep Runner Alive
-        shell: powershell
-        run: |
-          Write-Host "=== RUNNER LIVE ==="
-          Write-Host "Connect using the ID displayed in Step 3."
-          Write-Host "This step keeps the session open for 1 hour (3600 seconds)."
-          Start-Sleep -Seconds 3600
+    - name: Keep Runner Alive
+      run: |
+        echo "Keep-alive active. Connect now! The runner will stay open for up to 6 hours or until manually cancelled."
+        # Loops for ~6 hours (21600 seconds) to keep the runner from closing
+        $timeout = 21600 
+        while ($timeout -gt 0) {
+            Start-Sleep -Seconds 10
+            $timeout -= 10
+        }
