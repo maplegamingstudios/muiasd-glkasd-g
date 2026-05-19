@@ -1,39 +1,37 @@
 name: Remote Desktop via AnyDesk
 
 on: 
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  workflow_dispatch: 
 
 jobs:
   anydesk-connect:
     runs-on: windows-latest
     steps:
-      - name: Download and Install AnyDesk
+      - name: Download and Setup AnyDesk Standalone
         shell: powershell
         run: |
-          echo "Downloading AnyDesk..."
-          Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
+          echo "Creating AnyDesk directory..."
+          New-Item -ItemType Directory -Force -Path "C:\AnyDesk"
           
-          echo "Installing AnyDesk as a background service..."
-          Start-Process -FilePath ".\AnyDesk.exe" -ArgumentList "--install", "C:\Program Files (x86)\AnyDesk", "--start-with-win", "--silent" -Wait
+          echo "Downloading AnyDesk..."
+          Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "C:\AnyDesk\anydesk.exe"
 
       - name: Configure Unattended Access Password
         shell: powershell
         run: |
-          echo "Navigating to AnyDesk folder..."
-          cd "C:\Program Files (x86)\AnyDesk"
+          cd "C:\AnyDesk"
           
-          # Sets the unattended password. Change 'YourSecurePassword123!' to your preference.
           echo "Setting up unattended access password..."
+          # Change 'YourSecurePassword123!' to your desired password
           echo "YourSecurePassword123!" | .\anydesk.exe --set-password
 
       - name: Retrieve AnyDesk ID
         shell: powershell
         run: |
-          # Wait a few seconds for the background service to assign an ID
+          # Give the background process a brief moment to initialize
           Start-Sleep -Seconds 5
           
-          echo "Navigating to AnyDesk folder..."
-          cd "C:\Program Files (x86)\AnyDesk"
+          cd "C:\AnyDesk"
           
           echo "Retrieving your AnyDesk Address ID..."
           $anydeskId = .\anydesk.exe --get-id | Out-String
